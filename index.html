@@ -31,56 +31,78 @@ import {initializeApp} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase
 import {getAuth,GoogleAuthProvider,signInWithPopup,signInWithRedirect,getRedirectResult,onAuthStateChanged,signOut} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
 import {getFirestore,doc,getDoc,setDoc} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 const $=id=>document.getElementById(id);const DEFAULT=['An','Bình','Chi','Dũng','Hà','Huy','Lan','Linh','Mai','Minh','Nam','Ngọc','Phúc','Quân','Trang'];let state={title:'Bẫy Dò Bò',names:DEFAULT,history:[],music:false,sound:true};try{state={...state,...JSON.parse(localStorage.getItem('cowGameState')||'{}')}}catch{}let auth,db,user=null,ready=false,playing=false,caught=[];const saveLocal=()=>localStorage.setItem('cowGameState',JSON.stringify(state));const cleanNames=v=>[...new Set(v.split(/\r?\n/).map(s=>s.trim()).filter(Boolean))].slice(0,300);function apply(){ $('heading').textContent='🐮 '+state.title+' 🐮';$('titleInput').value=state.title;$('names').value=state.names.join('\n');$('music').textContent=state.music?'🔇 Tắt nhạc nền':'🔊 Bật nhạc nền';$('sound').textContent='🔔 Hiệu ứng âm thanh: '+(state.sound?'Bật':'Tắt');renderHistory();renderHerd();}async function persist(){saveLocal();if(user&&db){try{await setDoc(doc(db,'users',user.uid),{...state,updatedAt:Date.now()});$('status').textContent='Đã đồng bộ với Firebase · '+user.email}catch(e){$('status').textContent='Lưu cục bộ thành công, đồng bộ lỗi: '+e.message}}}function renderHistory(){$('history').replaceChildren();if(!state.history.length){$('history').textContent='Chưa có lượt bắt nào';return}state.history.slice(0,25).forEach(h=>{const p=document.createElement('div');p.className='pill';p.textContent=h.time+' — '+h.names.join(', ');$('history').append(p)})}function renderHerd(){document.querySelectorAll('#arena > .rope').forEach(el=>el.remove());const herd=$('herd');herd.replaceChildren();caught=[];const names=state.names.slice(0,100);names.forEach((name,i)=>{const c=document.createElement('div');c.className='cow';c.dataset.name=name;c.style.bottom=(48+(i%3)*11)+'%';c.style.setProperty('--duration',(10+i%7*1.15)+'s');c.style.setProperty('--delay',(-((i*1.67)%12))+'s');c.innerHTML='<span class="tag"></span><span class="animal"><svg viewBox="0 0 150 115" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Bò hoạt hình chạy về bên trái"><ellipse cx="81" cy="105" rx="57" ry="7" fill="#356524" opacity=".25"/><path d="M102 55 Q145 27 140 73" fill="none" stroke="#44382f" stroke-width="5" stroke-linecap="round"/><path d="M137 72 Q148 76 141 85" fill="none" stroke="#44382f" stroke-width="5"/><path d="M53 65 L48 103 Q55 109 63 103 L71 76 M105 69 L108 103 Q117 109 123 102 L124 65" fill="#fff" stroke="#55453e" stroke-width="4" stroke-linejoin="round"/><ellipse cx="88" cy="59" rx="49" ry="34" fill="#fff" stroke="#56463e" stroke-width="3"/><path d="M82 29 Q110 24 112 45 Q105 57 89 53 L78 43Z M99 68 Q117 57 131 69 Q126 84 112 88Z" fill="#373538"/><path d="M61 80 Q76 93 83 82" fill="#ffafbc"/><path d="M37 51 Q18 38 22 26 L38 35" fill="#fff" stroke="#58453a" stroke-width="3"/><path d="M57 46 Q60 21 71 26 L65 46" fill="#fff" stroke="#58453a" stroke-width="3"/><path d="M30 29 Q25 15 34 14 L38 31 M53 29 Q53 15 62 17 L61 34" fill="#f4c25a" stroke="#80592b" stroke-width="3"/><ellipse cx="39" cy="54" rx="31" ry="30" fill="#fff" stroke="#56463e" stroke-width="3"/><path d="M29 28 Q39 23 47 35 L40 46 25 43Z" fill="#333"/><ellipse cx="13" cy="66" rx="17" ry="14" fill="#ffb4b7" stroke="#a97877" stroke-width="2"/><ellipse cx="7" cy="66" rx="2.7" ry="4" fill="#aa6d70"/><ellipse cx="18" cy="66" rx="2.7" ry="4" fill="#aa6d70"/><ellipse cx="34" cy="48" rx="8" ry="10" fill="white"/><circle cx="30" cy="48" r="4" fill="#302522"/><path d="M45 70 Q54 80 60 69" fill="none" stroke="#8c5c51" stroke-width="3"/><path d="M50 78 L57 86 64 77" fill="#f2c43e" stroke="#bb7a2b" stroke-width="2"/></svg></span>';c.querySelector('.tag').textContent=name;herd.append(c)});$('count').replaceChildren();for(let i=1;i<=10;i++){const opt=document.createElement('option');opt.value=i;opt.textContent=i;$('count').append(opt)}$('count').value=Math.min(Number($('count').dataset.last||1),10);$('result').textContent='🐮 Có '+state.names.length+' tên trong trang trại. Sẵn sàng!'}function randSelect(items,n){const arr=[...items];for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]]}return arr.slice(0,n)}let audioCtx,loop;function tone(f,t,d=.13,type='sine',vol=.045){if(!audioCtx)return;const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type=type;o.frequency.value=f;g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.0001,t+d);o.connect(g).connect(audioCtx.destination);o.start(t);o.stop(t+d+.02)}function startMusic(){try{audioCtx??=new(window.AudioContext||window.webkitAudioContext)();audioCtx.resume();if(loop)clearInterval(loop);let beat=0;const melody=[392,440,523,440,392,330,349,392,523,587,659,523,440,392,349,330];function tick(){if(state.music&&audioCtx){tone(melody[beat%melody.length],audioCtx.currentTime,.18,'triangle',.025);if(beat%4===0)tone(196,audioCtx.currentTime,.22,'sine',.02);beat++}}tick();loop=setInterval(tick,240)}catch(e){console.warn(e)}}function effect(){if(!state.sound)return;try{audioCtx??=new(window.AudioContext||window.webkitAudioContext)();audioCtx.resume();[523,659,784].forEach((f,i)=>tone(f,audioCtx.currentTime+i*.1,.18,'triangle',.08))}catch{}}$('catch').onclick=async()=>{if(playing)return;const n=Number($('count').value);if(n>state.names.length){$('result').textContent='⚠️ Cần ít nhất '+n+' tên để bắt '+n+' bò.';return}playing=true;$('catch').disabled=true;$('lasso').classList.remove('throw');void $('lasso').offsetWidth;$('lasso').classList.add('throw');effect();const selected=randSelect(state.names,n);const cows=[...document.querySelectorAll('.cow')];const targets=selected.map(name=>cows.find(c=>c.dataset.name===name)).filter(Boolean);launchRope(targets[0]);await new Promise(r=>setTimeout(r,480));targets.forEach((c,i)=>{c.classList.add('caught');const r=c.getBoundingClientRect(),a=$('arena').getBoundingClientRect();const rope=document.createElement('div');rope.className='rope';rope.style.left=(r.left-a.left+r.width/2)+'px';rope.style.top=(r.top-a.top+r.height/2)+'px';rope.style.animationDelay=(i*.08)+'s';$('arena').append(rope);caught.push(rope)});await new Promise(r=>setTimeout(r,500));$('result').textContent='🎉 Bắt được '+n+' bò: '+selected.join(' · ');state.history.unshift({time:new Date().toLocaleString('vi-VN'),names:selected});state.history=state.history.slice(0,50);renderHistory();await persist();playing=false;$('catch').disabled=false};$('reset').onclick=()=>{caught.forEach(x=>x.remove());renderHerd()};$('count').onchange=()=>{$('count').dataset.last=$('count').value};const toggle=show=>{$('drawer').classList.toggle('open',show);$('overlay').classList.toggle('show',show)};$('menu').onclick=()=>toggle(true);$('close').onclick=$('overlay').onclick=()=>toggle(false);$('save').onclick=async()=>{const names=cleanNames($('names').value);if(!names.length){alert('Hãy nhập ít nhất một tên');return}state.names=names;state.title=$('titleInput').value.trim()||'Bẫy Dò Bò';apply();await persist();toggle(false)};$('music').onclick=async()=>{state.music=!state.music;if(state.music)startMusic();else if(loop){clearInterval(loop);loop=null}apply();await persist()};$('sound').onclick=async()=>{state.sound=!state.sound;apply();await persist()};$('clearHistory').onclick=async()=>{if(confirm('Xóa toàn bộ lịch sử bắt bò?')){state.history=[];renderHistory();await persist()}};$('configToggle').onclick=()=>$('setup').classList.toggle('show');$('configSave').onclick=()=>{try{const c=JSON.parse($('firebaseConfig').value);if(!c.apiKey||!c.projectId||!c.appId)throw Error('Thiếu apiKey, projectId hoặc appId');localStorage.setItem('cowFirebaseConfig',JSON.stringify(c));alert('Đã lưu cấu hình. Trang sẽ tải lại.');location.reload()}catch(e){alert('Cấu hình chưa hợp lệ: '+e.message)}};async function initFirebase(){let cfg={"apiKey": "AIzaSyCKW3oaJi1nasP-a31zjmWipj6h87SxEQ8", "authDomain": "baybo-a5b38.firebaseapp.com", "projectId": "baybo-a5b38", "storageBucket": "baybo-a5b38.firebasestorage.app", "messagingSenderId": "353432544429", "appId": "1:353432544429:web:339c23e634ec716a359224", "measurementId": "G-M6E7F9N63T"};if(!cfg){$('status').textContent='Chưa cấu hình Firebase · Đang lưu trên thiết bị';$('login').onclick=()=>{toggle(true);$('setup').classList.add('show')};return}try{const app=initializeApp(cfg);auth=getAuth(app);db=getFirestore(app);ready=true;const provider=new GoogleAuthProvider();$('login').onclick=async()=>{if(user){if(confirm('Đăng xuất Google?'))await signOut(auth);return}try{await signInWithPopup(auth,provider)}catch(e){if(e.code==='auth/popup-blocked'){await signInWithRedirect(auth,provider)}else alert('Đăng nhập lỗi: '+e.message)}};await getRedirectResult(auth).catch(console.warn);onAuthStateChanged(auth,async u=>{user=u;$('login').textContent=u?'🚪 Đăng xuất':'Đăng nhập Google';if(u){$('status').textContent='Đang tải dữ liệu...';try{const snap=await getDoc(doc(db,'users',u.uid));if(snap.exists()){state={...state,...snap.data()};apply();saveLocal()}else await persist();$('status').textContent='Đã đăng nhập: '+u.email}catch(e){$('status').textContent='Lỗi tải dữ liệu: '+e.message}}else $('status').textContent='Chưa đăng nhập · Dữ liệu lưu trên thiết bị'})}catch(e){$('status').textContent='Firebase lỗi: '+e.message}}
-// Arcade lasso: rope loops orbit in perspective, with a continuous flexible tether.
+// Single continuous rope: constrained Verlet particles with a rotating guide and throw impulse.
 const ropeCanvas=document.getElementById('ropePhysics'),ropeCtx=ropeCanvas.getContext('2d');
-const ropeMotion={phase:0,speed:7.4,throwing:false,start:0,target:null};
+const ropeMotion={phase:0,speed:5.7,throwing:false,start:0,target:null,points:[],last:0,ready:false};
+const ROPE_N=42,LOOP_START=13;
+function ropeReset(w,h){
+ const scale=Math.max(.62,Math.min(w/720,h/500,1.15)),grip={x:w*.53,y:h*.825};
+ const cx=grip.x-34*scale,cy=grip.y-145*scale,rx=86*scale,ry=35*scale;
+ ropeMotion.points=[];
+ for(let i=0;i<ROPE_N;i++){
+  const t=i/(LOOP_START-1);
+  let x,y;
+  if(i<LOOP_START){x=grip.x+(cx-rx-grip.x)*t;y=grip.y+(cy-grip.y)*t-35*scale*Math.sin(Math.PI*t)}
+  else{const a=(i-LOOP_START)/(ROPE_N-LOOP_START-1)*Math.PI*1.95+Math.PI;x=cx+rx*Math.cos(a);y=cy+ry*Math.sin(a)}
+  ropeMotion.points.push({x,y,px:x,py:y});
+ }
+ ropeMotion.ready=true;ropeMotion.w=w;ropeMotion.h=h;
+}
 function ropeFrame(ms){
- const arena=document.getElementById('arena'),r=arena.getBoundingClientRect(),w=r.width,h=r.height;
- const dpr=Math.min(window.devicePixelRatio||1,2),pw=Math.round(w*dpr),ph=Math.round(h*dpr);
- if(ropeCanvas.width!==pw||ropeCanvas.height!==ph){ropeCanvas.width=pw;ropeCanvas.height=ph}
+ const rect=document.getElementById('arena').getBoundingClientRect(),w=rect.width,h=rect.height;
+ const dpr=Math.min(window.devicePixelRatio||1,2);
+ if(ropeCanvas.width!==Math.round(w*dpr)||ropeCanvas.height!==Math.round(h*dpr)){ropeCanvas.width=Math.round(w*dpr);ropeCanvas.height=Math.round(h*dpr)}
  const ctx=ropeCtx;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
- const dt=Math.min(.04,(ms-(ropeFrame.last||ms))/1000);ropeFrame.last=ms;
- const grip={x:w*.525,y:h*.82},scale=Math.min(w/680,h/490,1.25),a=ropeMotion.phase;
- let cx,cy,spread,tilt,spin=a,flight=0;
+ if(!ropeMotion.ready||Math.abs(ropeMotion.w-w)>2||Math.abs(ropeMotion.h-h)>2)ropeReset(w,h);
+ const scale=Math.max(.62,Math.min(w/720,h/500,1.15)),grip={x:w*.53,y:h*.825};
+ const dt=Math.min(.033,Math.max(.008,(ms-(ropeMotion.last||ms))/1000));ropeMotion.last=ms;
+ const p=ropeMotion.points;ropeMotion.phase+=ropeMotion.speed*dt;
+ let throwT=0,centerX,centerY,rx=86*scale,ry=34*scale;
  if(ropeMotion.throwing){
-   flight=Math.min(1,(ms-ropeMotion.start)/850);
-   const t=flight*flight*(3-2*flight),target=ropeMotion.target||{x:w*.5,y:h*.32};
-   cx=grip.x+(target.x-grip.x)*t;
-   cy=grip.y-112*scale+(target.y-grip.y+112*scale)*t-85*scale*Math.sin(Math.PI*t);
-   spread=(110-25*t)*scale;tilt=.4+.2*t;spin+=t*3;
-   if(flight>=1){ropeMotion.throwing=false;ropeMotion.target=null}
+  throwT=Math.min(1,(ms-ropeMotion.start)/850);
+  const ease=throwT*throwT*(3-2*throwT),dest=ropeMotion.target||{x:w*.5,y:h*.35};
+  centerX=grip.x-35*scale+(dest.x-grip.x+35*scale)*ease;
+  centerY=grip.y-145*scale+(dest.y-grip.y+145*scale)*ease-65*scale*Math.sin(Math.PI*throwT);
+  rx*=1-.24*ease;ry*=1-.24*ease;
  }else{
-   ropeMotion.phase+=ropeMotion.speed*dt;
-   spin=ropeMotion.phase;
-   cx=grip.x+Math.cos(spin)*55*scale;
-   cy=grip.y-123*scale+Math.sin(spin*1.15)*18*scale;
-   spread=110*scale;
-   tilt=.30+.17*Math.abs(Math.cos(spin));
+  centerX=grip.x-35*scale+Math.cos(ropeMotion.phase)*27*scale;
+  centerY=grip.y-145*scale+Math.sin(ropeMotion.phase)*13*scale;
  }
+ const anchors=new Map([[0,grip]]);
+ const rot=ropeMotion.phase;
+ for(let i=LOOP_START;i<ROPE_N;i++){
+  const a=(i-LOOP_START)/(ROPE_N-LOOP_START-1)*Math.PI*1.95+Math.PI;
+  const guide={x:centerX+rx*Math.cos(a+rot*.24),y:centerY+ry*Math.sin(a+rot*.24)*(.82+.18*Math.cos(rot))};
+  // A few guided particles maintain the open loop; all others follow by constraints.
+  if(i===LOOP_START||i===ROPE_N-1||i%7===0)anchors.set(i,guide);
+ }
+ // Verlet integration: inertia, damping, and small gravity.
+ for(let i=1;i<ROPE_N;i++){
+  const v=p[i],vx=(v.x-v.px)*.92,vy=(v.y-v.py)*.92;
+  v.px=v.x;v.py=v.y;v.x+=vx;v.y+=vy+.18*scale;
+  const guide=anchors.get(i);
+  if(guide){v.x+=(guide.x-v.x)*.48;v.y+=(guide.y-v.y)*.48}
+ }
+ // Iterative distance constraints stop the tether from stretching freely.
+ for(let iter=0;iter<9;iter++){
+  p[0].x=grip.x;p[0].y=grip.y;
+  for(let i=1;i<ROPE_N;i++){
+   const a=p[i-1],b=p[i],dx=b.x-a.x,dy=b.y-a.y,dist=Math.hypot(dx,dy)||1;
+   const nominal=i<LOOP_START?Math.hypot((centerX-rx-grip.x)/(LOOP_START-1),(centerY-grip.y)/(LOOP_START-1))*1.16:2*Math.PI*Math.sqrt((rx*rx+ry*ry)/2)/(ROPE_N-LOOP_START-1);
+   const correction=(dist-nominal)/dist*.65;
+   if(i>1){a.x+=dx*correction*.5;a.y+=dy*correction*.5}
+   b.x-=dx*correction*.5;b.y-=dy*correction*.5;
+  }
+  for(const [i,v] of anchors){const q=p[i];q.x+=(v.x-q.x)*.68;q.y+=(v.y-q.y)*.68}
+ }
+ // Draw one uninterrupted strand, not several independent ellipses.
  ctx.lineCap='round';ctx.lineJoin='round';
- function strokeRope(draw,width=9){
-   ctx.beginPath();draw(ctx);ctx.strokeStyle='#82501f';ctx.lineWidth=width+3;ctx.stroke();
-   ctx.strokeStyle='#e9bf76';ctx.lineWidth=width;ctx.stroke();
-   ctx.strokeStyle='#fff0bd';ctx.lineWidth=Math.max(1.2,width*.22);ctx.stroke();
- }
- // Tether emerges from the clenched fist and follows the circular motion.
- strokeRope(c=>{c.moveTo(grip.x,grip.y);c.bezierCurveTo(grip.x-26*scale,grip.y-60*scale,cx-85*scale,cy+65*scale,cx-spread*.7,cy)},7*scale);
- // Multiple connected figure-eight coils, not an isolated rigid ellipse.
- const coils=ropeMotion.throwing?1:3;
- for(let j=coils-1;j>=0;j--){
-   const lag=j*.54,angle=spin-lag;
-   const ox=(j-1)*30*scale+Math.cos(angle)*18*scale;
-   const oy=(j-1)*5*scale+Math.sin(angle)*12*scale;
-   const rx=spread*(1-j*.12),ry=spread*(.46-j*.06)*tilt/.43;
-   ctx.save();ctx.translate(cx+ox,cy+oy);ctx.rotate(Math.sin(angle)*.28);
-   strokeRope(c=>c.ellipse(0,0,rx,ry,0,0,Math.PI*2),7*scale);
-   ctx.restore();
- }
- // Crossing strands suggest the loops folding over each other during rotation.
- if(!ropeMotion.throwing)strokeRope(c=>{c.moveTo(cx-70*scale,cy+16*scale);c.bezierCurveTo(cx-20*scale,cy-30*scale,cx+28*scale,cy+36*scale,cx+80*scale,cy-12*scale)},5*scale);
+ function drawPath(){ctx.beginPath();ctx.moveTo(p[0].x,p[0].y);for(let i=1;i<p.length-1;i++){const mx=(p[i].x+p[i+1].x)/2,my=(p[i].y+p[i+1].y)/2;ctx.quadraticCurveTo(p[i].x,p[i].y,mx,my)}ctx.lineTo(p[p.length-1].x,p[p.length-1].y)}
+ for(const [width,color] of [[12,'#79471f'],[8,'#e8b76a'],[2,'#fff1bb']]){drawPath();ctx.strokeStyle=color;ctx.lineWidth=width*scale;ctx.stroke()}
+ if(ropeMotion.throwing&&throwT>=1){ropeMotion.throwing=false;ropeMotion.target=null;ropeReset(w,h)}
  requestAnimationFrame(ropeFrame);
 }
 requestAnimationFrame(ropeFrame);
-function launchRope(target){const a=document.getElementById('arena').getBoundingClientRect();const b=target?.getBoundingClientRect();ropeMotion.target=b?{x:b.left-a.left+b.width*.5,y:b.top-a.top+b.height*.6}:{x:a.width*.5,y:a.height*.35};ropeMotion.throwing=true;ropeMotion.start=performance.now();ropeMotion.angularSpeed=12}
+function launchRope(target){const a=document.getElementById('arena').getBoundingClientRect();const b=target?.getBoundingClientRect();ropeMotion.target=b?{x:b.left-a.left+b.width*.5,y:b.top-a.top+b.height*.6}:{x:a.width*.5,y:a.height*.35};ropeMotion.throwing=true;ropeMotion.start=performance.now();ropeMotion.speed=5.7}
 apply();initFirebase();if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(console.warn);
 </script></body></html>
