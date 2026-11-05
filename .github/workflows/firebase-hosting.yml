@@ -20,13 +20,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Authenticate to Google Cloud
+        id: google-auth
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: projects/353432544429/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions
           service_account: github-firebase-deploy@baybo-a5b38.iam.gserviceaccount.com
+          create_credentials_file: true
+          export_environment_variables: true
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Verify Google Cloud authentication
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.google-auth.outputs.credentials_file_path }}
+        run: |
+          test -s "$GOOGLE_APPLICATION_CREDENTIALS"
+          node -e "const c=require(process.env.GOOGLE_APPLICATION_CREDENTIALS); console.log('Credential type:',c.type)"
       - name: Deploy to Firebase Hosting
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.google-auth.outputs.credentials_file_path }}
+          GOOGLE_CLOUD_PROJECT: baybo-a5b38
+          GCLOUD_PROJECT: baybo-a5b38
         run: npx --yes firebase-tools@latest deploy --only hosting --project baybo-a5b38 --non-interactive
